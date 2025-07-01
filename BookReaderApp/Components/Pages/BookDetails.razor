@@ -1,0 +1,267 @@
+@rendermode InteractiveServer
+@page "/book/{BookId:int}/details"
+@inject IBookService BookService
+@inject INoteService NoteService
+@inject IBookmarkService BookmarkService
+@inject NavigationManager Navigation
+
+<PageTitle>@(book?.Title ?? "Szczegóły książki")</PageTitle>
+
+@if (book == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Ładowanie...</span>
+        </div>
+        <p class="mt-2">Ładowanie szczegółów książki...</p>
+    </div>
+}
+else
+{
+    <div class="container mt-4">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/library">Biblioteka</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">@book.Title</li>
+                    </ol>
+                </nav>
+                <h2 class="mb-0">
+                    <i class="fas fa-@(book.FileType.ToLower() == "pdf" ? "file-pdf" : "file-word") text-muted me-2"></i>
+                    @book.Title
+                </h2>
+            </div>
+            <div>
+                <a href="/reader/@BookId" class="btn btn-primary">
+                    <i class="fas fa-book-open"></i> Czytaj
+                </a>
+            </div>
+        </div>
+
+        <!-- Book Info -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h5>Informacje o książce</h5>
+                                <table class="table table-borderless">
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Nazwa pliku:</strong></td>
+                                            <td>@book.FileName</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Typ pliku:</strong></td>
+                                            <td>@book.FileType.ToUpper()</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Data dodania:</strong></td>
+                                            <td>@book.UploadDate.ToString("dd.MM.yyyy HH:mm")</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Liczba znaków:</strong></td>
+                                            <td>@book.Content.Length.ToString("N0")</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>Postęp czytania</h5>
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-2">
+                                        <span>Ukończono:</span>
+                                        <span class="fw-bold">@book.ReadingProgress.ToString("F1")%</span>
+                                    </div>
+                                    <div class="progress" style="height: 10px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: @book.ReadingProgress%" 
+                                             aria-valuenow="@book.ReadingProgress" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                </div>
+                                <table class="table table-borderless">
+                                    <tbody>
+                                        <tr>
+                                            <td><strong>Notatki:</strong></td>
+                                            <td>@book.Notes.Count</td>
+                                        </tr>
+                                        <tr>
+                                            <td><strong>Zakładki:</strong></td>
+                                            <td>@book.Bookmarks.Count</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes and Bookmarks -->
+        <div class="row">
+            <!-- Notes Column -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-sticky-note text-warning"></i> Notatki
+                        </h5>
+                        <span class="badge bg-secondary">@book.Notes.Count</span>
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        @if (book.Notes.Any())
+                        {
+                            @foreach (var note in book.Notes.OrderByDescending(n => n.CreatedDate))
+                            {
+                                <div class="card mb-3 border-left-warning">
+                                    <div class="card-body">
+                                        @if (!string.IsNullOrEmpty(note.SelectedText))
+                                        {
+                                            <blockquote class="blockquote-footer mb-2">
+                                                <small class="text-muted">
+                                                    <i class="fas fa-quote-left"></i>
+                                                    <em>"@(note.SelectedText.Length > 100 ? note.SelectedText.Substring(0, 100) + "..." : note.SelectedText)"</em>
+                                                </small>
+                                            </blockquote>
+                                        }
+                                        <p class="card-text">@note.Content</p>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                <i class="fas fa-calendar-alt"></i> @note.CreatedDate.ToString("dd.MM.yyyy HH:mm")
+                                            </small>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteNote(note.Id)" 
+                                                    title="Usuń notatkę">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-sticky-note fa-3x mb-3"></i>
+                                <p>Brak notatek dla tej książki.</p>
+                                <small>Notatki możesz dodawać podczas czytania.</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Bookmarks Column -->
+            <div class="col-md-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-bookmark text-success"></i> Zakładki
+                        </h5>
+                        <span class="badge bg-secondary">@book.Bookmarks.Count</span>
+                    </div>
+                    <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        @if (book.Bookmarks.Any())
+                        {
+                            @foreach (var bookmark in book.Bookmarks.OrderByDescending(b => b.CreatedDate))
+                            {
+                                <div class="card mb-3 border-left-success">
+                                    <div class="card-body">
+                                        <h6 class="card-title">
+                                            <i class="fas fa-bookmark text-success me-2"></i>@bookmark.Title
+                                        </h6>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                <i class="fas fa-calendar-alt"></i> @bookmark.CreatedDate.ToString("dd.MM.yyyy HH:mm")
+                                            </small>
+                                            <div>
+                                                <a href="/reader/@BookId?position=@bookmark.Position" 
+                                                   class="btn btn-sm btn-primary me-2" title="Przejdź do zakładki">
+                                                    <i class="fas fa-book-open"></i> Przejdź
+                                                </a>
+                                                <button class="btn btn-sm btn-outline-danger" 
+                                                        @onclick="() => DeleteBookmark(bookmark.Id)" title="Usuń zakładkę">
+                                                    <i class="fas fa-trash"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <div class="text-center text-muted py-4">
+                                <i class="fas fa-bookmark fa-3x mb-3"></i>
+                                <p>Brak zakładek dla tej książki.</p>
+                                <small>Zakładki możesz dodawać podczas czytania.</small>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int BookId { get; set; }
+    
+    private Book? book;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBookDetails();
+    }
+
+    private async Task LoadBookDetails()
+    {
+        try
+        {
+            book = await BookService.GetBookWithNotesAndBookmarksAsync(BookId);
+            if (book == null)
+            {
+                Navigation.NavigateTo("/library");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading book details: {ex.Message}");
+            Navigation.NavigateTo("/library");
+        }
+    }
+
+    private async Task DeleteNote(int noteId)
+    {
+        try
+        {
+            await NoteService.DeleteNoteAsync(noteId);
+            await LoadBookDetails(); // Refresh the data
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting note: {ex.Message}");
+            // TODO: Show error message to user
+        }
+    }
+
+    private async Task DeleteBookmark(int bookmarkId)
+    {
+        try
+        {
+            await BookmarkService.DeleteBookmarkAsync(bookmarkId);
+            await LoadBookDetails(); // Refresh the data
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error deleting bookmark: {ex.Message}");
+            // TODO: Show error message to user
+        }
+    }
+}
