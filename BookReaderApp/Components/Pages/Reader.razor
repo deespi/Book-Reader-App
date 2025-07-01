@@ -65,8 +65,8 @@ else
         </div>
         
         <!-- Reading Area -->
-        <div class="reader-content" @onscroll="OnScroll" @onmouseup="OnTextSelection">
-            <div class="reading-text" style="font-size: @(fontSize)px; line-height: 1.6; font-family: 'Georgia', serif;">
+        <div class="reader-content" @onscroll="OnScroll" @onmouseup="OnTextSelection" style="height: calc(100vh - 120px); overflow-y: auto; padding: 20px;">
+            <div class="reading-text" style="font-size: @(fontSize)px; line-height: 1.6; font-family: 'Georgia', serif; max-width: 800px; margin: 0 auto;">
                 @((MarkupString)FormattedContent)
             </div>
         </div>
@@ -158,6 +158,10 @@ else
 }
 
 @code {
+    [Parameter] 
+    [SupplyParameterFromQuery(Name = "position")]
+    public int? InitialPosition { get; set; }
+
     [Parameter] public int BookId { get; set; }
     
     private Book? book;
@@ -172,14 +176,15 @@ else
     private string selectedText = "";
     private Timer? autoSaveTimer;
     private DotNetObjectReference<Reader>? objRef;
+    private DateTime lastAutoSave = DateTime.Now;
 
     protected override async Task OnInitializedAsync()
     {
         objRef = DotNetObjectReference.Create(this);
         await LoadBook();
         
-        // Setup auto-save timer (every 10 seconds)
-        autoSaveTimer = new Timer(async _ => await AutoSavePosition(), null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+        // Setup auto-save timer (every 10 seconds) - but don't auto-trigger it
+        // We'll handle auto-save manually to avoid scope issues
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -188,9 +193,48 @@ else
         {
             try
             {
-                await JSRuntime.InvokeVoidAsync("readerFunctions.init", objRef);
-                await Task.Delay(100); // Wait for DOM to settle
-                await JSRuntime.InvokeVoidAsync("readerFunctions.restoreScrollPosition", book.LastPosition);
+                // Wait for the page to fully load
+                await Task.Delay(1000);
+                
+                // Check if readerFunctions exists, if not, try to load it
+                var scriptExists = await JSRuntime.InvokeAsync<bool>("eval", "typeof window.readerFunctions !== 'undefined'");
+                
+                if (!scriptExists)
+                {
+                    Console.WriteLine("readerFunctions not found, attempting to load script");
+                    
+                    // Try to load the script dynamically
+                    await JSRuntime.InvokeVoidAsync("eval", @"
+                        if (!document.querySelector('script[src=""reader.js""]')) {
+                            var script = document.createElement('script');
+                            script.src = 'reader.js';
+                            script.onload = function() { console.log('reader.js loaded successfully'); };
+                            script.onerror = function() { console.error('Failed to load reader.js'); };
+                            document.head.appendChild(script);
+                        }
+                    ");
+                    
+                    // Wait for script to load
+                    await Task.Delay(2000);
+                    
+                    // Check again
+                    scriptExists = await JSRuntime.InvokeAsync<bool>("eval", "typeof window.readerFunctions !== 'undefined'");
+                }
+                
+                if (scriptExists)
+                {
+                    Console.WriteLine("readerFunctions found, initializing...");
+                    await JSRuntime.InvokeVoidAsync("readerFunctions.init", objRef);
+                    await Task.Delay(200);
+                    
+                    var positionToRestore = InitialPosition ?? book.LastPosition;
+                    await JSRuntime.InvokeVoidAsync("readerFunctions.restoreScrollPosition", positionToRestore);
+                    Console.WriteLine("Reader initialized successfully");
+                }
+                else
+                {
+                    Console.WriteLine("Could not load readerFunctions - reader.js may not be accessible");
+                }
             }
             catch (Exception ex)
             {
@@ -274,11 +318,29 @@ else
     {
         try
         {
-            var position = await JSRuntime.InvokeAsync<int>("readerFunctions.saveScrollPosition");
-            var progress = await JSRuntime.InvokeAsync<double>("readerFunctions.calculateReadingProgress");
+            // Check if JavaScript functions are available
+            var scriptExists = await JSRuntime.InvokeAsync<bool>("eval", "typeof window.readerFunctions !== 'undefined'");
             
-            currentPosition = position;
-            readingProgress = progress;
+            if (scriptExists)
+            {
+                var position = await JSRuntime.InvokeAsync<int>("readerFunctions.saveScrollPosition");
+                var progress = await JSRuntime.InvokeAsync<double>("readerFunctions.calculateReadingProgress");
+                
+                currentPosition = position;
+                readingProgress = progress;
+            }
+            else
+            {
+                // Fallback: basic scroll tracking without JavaScript
+                readingProgress = Math.Min(100, readingProgress + 0.1);
+            }
+            
+            // Auto-save periodically (every 10 seconds) but in the UI thread context
+            if (DateTime.Now - lastAutoSave > TimeSpan.FromSeconds(10))
+            {
+                await AutoSavePosition();
+                lastAutoSave = DateTime.Now;
+            }
             
             StateHasChanged();
         }
@@ -292,7 +354,12 @@ else
     {
         try
         {
-            selectedText = await JSRuntime.InvokeAsync<string>("readerFunctions.getSelectedText");
+            var scriptExists = await JSRuntime.InvokeAsync<bool>("eval", "typeof window.readerFunctions !== 'undefined'");
+            
+            if (scriptExists)
+            {
+                selectedText = await JSRuntime.InvokeAsync<string>("readerFunctions.getSelectedText");
+            }
         }
         catch (Exception ex)
         {
@@ -395,7 +462,14 @@ else
         
         if (book != null)
         {
-            await AutoSavePosition();
+            try
+            {
+                await AutoSavePosition();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error saving position on dispose: {ex.Message}");
+            }
         }
         
         if (isReading)
@@ -406,6 +480,12 @@ else
             }
             catch { }
         }
+        
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("readerFunctions.dispose");
+        }
+        catch { }
         
         objRef?.Dispose();
     }
