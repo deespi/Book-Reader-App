@@ -1,10 +1,18 @@
+using BookReaderApp.Data;
 using BookReaderApp.Components;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
+
+// Database configuration
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
+    ?? throw new InvalidOperationException("Connection string not found");
+
+builder.Services.AddDbContext<BookReaderContext>(options =>
+    options.UseNpgsql(connectionString));
 
 var app = builder.Build();
 
