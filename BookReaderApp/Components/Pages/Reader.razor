@@ -1,8 +1,11 @@
 @rendermode InteractiveServer
 @page "/reader/{BookId:int}"
+@using BookReaderApp.Models
 @inject IBookService BookService
-@inject NavigationManager Navigation
+@inject INoteService NoteService
+@inject IBookmarkService BookmarkService
 @inject IJSRuntime JSRuntime
+@inject NavigationManager Navigation
 @implements IAsyncDisposable
 
 <PageTitle>@(book?.Title ?? "Czytnik")</PageTitle>
@@ -53,6 +56,9 @@ else
                         <button class="btn btn-outline-info btn-sm" @onclick="ShowNoteModal" title="Dodaj notatkę">
                             <i class="fas fa-sticky-note"></i> Notatka
                         </button>
+                        <a href="/book/@BookId/details" class="btn btn-outline-dark btn-sm" title="Szczegóły książki">
+                            <i class="fas fa-info-circle"></i>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -180,9 +186,16 @@ else
     {
         if (firstRender && book != null)
         {
-            await JSRuntime.InvokeVoidAsync("readerFunctions.init", objRef);
-            await Task.Delay(100); // Wait for DOM to settle
-            await JSRuntime.InvokeVoidAsync("readerFunctions.restoreScrollPosition", book.LastPosition);
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("readerFunctions.init", objRef);
+                await Task.Delay(100); // Wait for DOM to settle
+                await JSRuntime.InvokeVoidAsync("readerFunctions.restoreScrollPosition", book.LastPosition);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing reader JavaScript: {ex.Message}");
+            }
         }
     }
 
@@ -305,14 +318,22 @@ else
 
         try
         {
-            // TODO: This will be implemented in Commit 8 with INoteService and IBookmarkService
-            // For now, just hide the modal
-            Console.WriteLine($"Bookmark saved: {bookmarkTitle} at position {currentPosition}");
+            var bookmark = new Bookmark
+            {
+                BookId = book.Id,
+                Title = bookmarkTitle.Trim(),
+                Position = currentPosition
+            };
+
+            await BookmarkService.AddBookmarkAsync(bookmark);
+            
             HideBookmarkModal();
+            // TODO: Show success message
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error saving bookmark: {ex.Message}");
+            // TODO: Show error message
         }
     }
 
@@ -334,14 +355,23 @@ else
 
         try
         {
-            // TODO: This will be implemented in Commit 8 with INoteService and IBookmarkService
-            // For now, just hide the modal
-            Console.WriteLine($"Note saved: {noteContent} with selected text: {selectedText}");
+            var note = new Note
+            {
+                BookId = book.Id,
+                Content = noteContent.Trim(),
+                Position = currentPosition,
+                SelectedText = string.IsNullOrWhiteSpace(selectedText) ? null : selectedText.Trim()
+            };
+
+            await NoteService.AddNoteAsync(note);
+            
             HideNoteModal();
+            // TODO: Show success message
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Error saving note: {ex.Message}");
+            // TODO: Show error message
         }
     }
 

@@ -19,6 +19,8 @@ builder.Services.AddDbContext<BookReaderContext>(options =>
 // Register services
 builder.Services.AddScoped<IFileProcessingService, FileProcessingService>();
 builder.Services.AddScoped<IBookService, BookService>();
+builder.Services.AddScoped<INoteService, NoteService>();
+builder.Services.AddScoped<IBookmarkService, BookmarkService>();
 
 var app = builder.Build();
 
