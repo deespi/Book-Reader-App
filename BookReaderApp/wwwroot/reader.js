@@ -98,6 +98,8 @@ window.readerFunctions = {
                 
                 // Only call if there's meaningful change
                 if (position > 0 || progress > 0) {
+                    // Note: This would require additional setup in the C# component
+                    // to handle static method calls from JavaScript
                     console.log('Auto-save position:', position, 'progress:', progress);
                 }
             }
@@ -113,6 +115,13 @@ window.readerFunctions = {
                 behavior: 'smooth'
             });
         }
+    },
+
+    // Highlight text (future feature)
+    highlightText: function(startOffset, endOffset) {
+        // Implementation for text highlighting
+        // This would be used for showing bookmark positions or search results
+        console.log('Highlight text from', startOffset, 'to', endOffset);
     },
 
     // Clean up
@@ -138,6 +147,7 @@ document.addEventListener('keydown', function(event) {
         case 'B':
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
+                // Trigger bookmark modal (would need to call back to Blazor component)
                 console.log('Bookmark shortcut pressed');
             }
             break;
@@ -145,12 +155,14 @@ document.addEventListener('keydown', function(event) {
         case 'N':
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
+                // Trigger note modal (would need to call back to Blazor component)
                 console.log('Note shortcut pressed');
             }
             break;
         case ' ':
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
+                // Toggle text-to-speech (would need to call back to Blazor component)
                 console.log('Text-to-speech shortcut pressed');
             }
             break;
@@ -158,12 +170,14 @@ document.addEventListener('keydown', function(event) {
         case '=':
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
+                // Increase font size (would need to call back to Blazor component)
                 console.log('Increase font size shortcut pressed');
             }
             break;
         case '-':
             if (event.ctrlKey || event.metaKey) {
                 event.preventDefault();
+                // Decrease font size (would need to call back to Blazor component)
                 console.log('Decrease font size shortcut pressed');
             }
             break;
