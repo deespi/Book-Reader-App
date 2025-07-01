@@ -1,3 +1,4 @@
+@rendermode InteractiveServer
 @page "/upload"
 @inject IFileProcessingService FileProcessingService
 @inject IBookService BookService
@@ -36,10 +37,11 @@
                             <label class="form-label fw-bold">
                                 <i class="fas fa-file"></i> Wybierz plik (PDF lub DOCX)
                             </label>
-                            <InputFile OnChange="@OnFileSelected" 
+                            <InputFile OnChange="OnFileSelected" 
                                       accept=".pdf,.docx" 
                                       class="form-control" 
-                                      disabled="@isProcessing" />
+                                      disabled="@isProcessing"
+                                      id="fileInput" />
                             <div class="form-text">
                                 Obsługiwane formaty: PDF, DOCX. Maksymalny rozmiar: @(FileProcessingService.GetMaxFileSizeBytes() / (1024 * 1024)) MB
                             </div>
@@ -100,24 +102,6 @@
                     </EditForm>
                 </div>
             </div>
-
-            <!-- Upload Tips -->
-            <div class="card mt-4 upload-tips">
-                <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-lightbulb"></i> Wskazówki
-                    </h5>
-                </div>
-                <div class="card-body">
-                    <ul class="mb-0">
-                        <li>Obsługiwane są pliki PDF i DOCX</li>
-                        <li>Aplikacja automatycznie wyodrębni tekst z dokumentu</li>
-                        <li>Twoja pozycja czytania będzie automatycznie zapisywana</li>
-                        <li>Możesz dodawać notatki i zakładki podczas czytania</li>
-                        <li>Dostępna jest funkcja czytania na głos</li>
-                    </ul>
-                </div>
-            </div>
         </div>
     </div>
 </div>
@@ -130,30 +114,50 @@
     private string? successMessage;
     private string processingStatus = "";
 
-    private class UploadModel
+    public class UploadModel
     {
         public string Title { get; set; } = string.Empty;
     }
 
     private void OnFileSelected(InputFileChangeEventArgs e)
     {
-        selectedFile = e.File;
+        if (e.FileCount == 0)
+        {
+            selectedFile = null;
+            StateHasChanged();
+            return;
+        }
+
+        var file = e.File;
+        selectedFile = file;
         errorMessage = null;
         successMessage = null;
 
-        // Walidacja rozmiaru pliku
-        if (selectedFile.Size > FileProcessingService.GetMaxFileSizeBytes())
+        if (selectedFile == null)
         {
-            errorMessage = $"Plik jest za duży. Maksymalny rozmiar: {FileProcessingService.GetMaxFileSizeBytes() / (1024 * 1024)} MB";
+            StateHasChanged();
+            return;
+        }
+
+        // Walidacja rozmiaru pliku
+        var maxSize = FileProcessingService.GetMaxFileSizeBytes();
+        
+        if (selectedFile.Size > maxSize)
+        {
+            errorMessage = $"Plik jest za duży. Maksymalny rozmiar: {maxSize / (1024 * 1024)} MB";
             selectedFile = null;
+            StateHasChanged();
             return;
         }
 
         // Walidacja typu pliku
-        if (!FileProcessingService.IsValidFileType(selectedFile.Name))
+        var isValidType = FileProcessingService.IsValidFileType(selectedFile.Name);
+        
+        if (!isValidType)
         {
             errorMessage = "Nieobsługiwany typ pliku. Wybierz plik PDF lub DOCX.";
             selectedFile = null;
+            StateHasChanged();
             return;
         }
 
@@ -183,12 +187,11 @@
             processingStatus = "Przesyłanie pliku...";
             StateHasChanged();
 
-            await Task.Delay(100); // Pozwól UI się odświeżyć
+            await Task.Delay(100);
 
             processingStatus = "Wyodrębnianie tekstu...";
             StateHasChanged();
 
-            // Przetwórz plik
             var book = await FileProcessingService.ProcessUploadedFileAsync(
                 selectedFile, 
                 string.IsNullOrWhiteSpace(uploadModel.Title) ? null : uploadModel.Title.Trim()
@@ -197,16 +200,13 @@
             processingStatus = "Zapisywanie do bazy danych...";
             StateHasChanged();
 
-            // Zapisz do bazy danych
             var savedBook = await BookService.AddBookAsync(book);
 
             successMessage = $"Książka \"{savedBook.Title}\" została pomyślnie dodana!";
             
-            // Wyczyść formularz
             uploadModel = new UploadModel();
             selectedFile = null;
 
-            // Przekieruj do biblioteki po 2 sekundach
             await Task.Delay(2000);
             Navigation.NavigateTo("/library");
         }

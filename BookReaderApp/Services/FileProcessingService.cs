@@ -17,9 +17,14 @@ public class FileProcessingService : IFileProcessingService
         _configuration = configuration;
     }
 
-    public Task<string> ExtractTextFromPdfAsync(Stream fileStream)
+    public async Task<string> ExtractTextFromPdfAsync(Stream fileStream)
     {
-        using var pdfReader = new PdfReader(fileStream);
+        // Skopiuj stream do MemoryStream aby umożliwić synchroniczne operacje
+        using var memoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
+        using var pdfReader = new PdfReader(memoryStream);
         using var pdfDocument = new PdfDocument(pdfReader);
         
         var textBuilder = new StringBuilder();
@@ -31,16 +36,21 @@ public class FileProcessingService : IFileProcessingService
             textBuilder.AppendLine(text);
         }
         
-        return Task.FromResult(textBuilder.ToString());
+        return textBuilder.ToString();
     }
 
-    public Task<string> ExtractTextFromDocxAsync(Stream fileStream)
+    public async Task<string> ExtractTextFromDocxAsync(Stream fileStream)
     {
-        using var document = WordprocessingDocument.Open(fileStream, false);
+        // Skopiuj stream do MemoryStream aby umożliwić synchroniczne operacje
+        using var memoryStream = new MemoryStream();
+        await fileStream.CopyToAsync(memoryStream);
+        memoryStream.Position = 0;
+
+        using var document = WordprocessingDocument.Open(memoryStream, false);
         var body = document.MainDocumentPart?.Document.Body;
         
         if (body == null)
-            return Task.FromResult(string.Empty);
+            return string.Empty;
 
         var textBuilder = new StringBuilder();
         
@@ -67,7 +77,7 @@ public class FileProcessingService : IFileProcessingService
             }
         }
         
-        return Task.FromResult(textBuilder.ToString());
+        return textBuilder.ToString();
     }
 
     public async Task<Book> ProcessUploadedFileAsync(IBrowserFile file, string? customTitle = null)
@@ -84,6 +94,7 @@ public class FileProcessingService : IFileProcessingService
         string content;
         string fileExtension = Path.GetExtension(file.Name).ToLowerInvariant();
 
+        // Otwórz stream z limitem rozmiaru
         using var stream = file.OpenReadStream(GetMaxFileSizeBytes());
         
         content = fileExtension switch

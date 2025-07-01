@@ -1,16 +1,17 @@
 using BookReaderApp.Data;
-using BookReaderApp.Components;
 using BookReaderApp.Services;
+using BookReaderApp.Components;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // Database configuration
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? throw new InvalidOperationException("Connection string not found");
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found. Please set it using User Secrets: dotnet user-secrets set \"ConnectionStrings:DefaultConnection\" \"your-connection-string\"");
 
 builder.Services.AddDbContext<BookReaderContext>(options =>
     options.UseNpgsql(connectionString));
@@ -32,23 +33,15 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseAntiforgery();
 
+// Map Razor components for .NET 8
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 // Ensure database is created
 using (var scope = app.Services.CreateScope())
 {
-    try
-    {
-        var context = scope.ServiceProvider.GetRequiredService<BookReaderContext>();
-        await context.Database.EnsureCreatedAsync();
-    }
-    catch (Exception ex)
-    {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while setting up the database.");
-        throw;
-    }
+    var context = scope.ServiceProvider.GetRequiredService<BookReaderContext>();
+    await context.Database.EnsureCreatedAsync();
 }
 
 app.Run();

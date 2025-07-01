@@ -295,3 +295,222 @@
         margin-bottom: 0;
     }
 }
+
+/* Reader Container */
+.reader-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background-color: #f8f9fa;
+}
+
+.reader-toolbar {
+    flex-shrink: 0;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    background-color: white !important;
+    border-bottom: 1px solid #dee2e6;
+    z-index: 100;
+}
+
+.reader-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2rem;
+    background-color: #f8f9fa;
+    scroll-behavior: smooth;
+}
+
+.reading-text {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    padding: 3rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    line-height: 1.8;
+    color: #333;
+}
+
+.reading-text p {
+    margin-bottom: 1.5rem;
+    text-align: justify;
+    text-indent: 1.5em;
+}
+
+.reading-text p:first-child {
+    text-indent: 0;
+}
+
+/* Reader Toolbar */
+.reader-toolbar .container-fluid {
+    padding: 0.5rem 1rem;
+}
+
+.reader-toolbar .btn-group-sm .btn {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+}
+
+.reader-toolbar h5 {
+    margin: 0;
+    color: #333;
+}
+
+/* Progress Bar at bottom */
+.progress {
+    flex-shrink: 0;
+    border-radius: 0;
+    height: 4px;
+    background-color: #e9ecef;
+}
+
+.progress-bar {
+    transition: width 0.3s ease;
+}
+
+/* Modal Improvements for Reader */
+.modal.show {
+    background-color: rgba(0,0,0,0.5);
+}
+
+.modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+    border-bottom: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    border-radius: 12px 12px 0 0;
+}
+
+.modal-footer {
+    border-top: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    border-radius: 0 0 12px 12px;
+}
+
+.modal-lg {
+    max-width: 600px;
+}
+
+/* Alert styles in modals */
+.modal .alert-secondary {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    color: #6c757d;
+}
+
+/* Button groups in toolbar */
+.btn-group .btn {
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-top-left-radius: 6px;
+    border-bottom-left-radius: 6px;
+}
+
+.btn-group .btn:last-child {
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+/* Mobile Responsive for Reader */
+@media (max-width: 768px) {
+    .reader-content {
+        padding: 1rem;
+    }
+    
+    .reading-text {
+        padding: 1.5rem;
+        font-size: 14px;
+        line-height: 1.6;
+    }
+    
+    .reader-toolbar .d-flex {
+        flex-direction: column;
+        gap: 0.5rem;
+        align-items: stretch !important;
+    }
+    
+    .reader-toolbar .btn-group {
+        justify-content: center;
+    }
+    
+    .reader-toolbar h5 {
+        text-align: center;
+        font-size: 1rem;
+    }
+    
+    .btn-group .btn {
+        font-size: 0.75rem;
+        padding: 0.25rem 0.4rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .reading-text {
+        padding: 1rem;
+        font-size: 13px;
+        line-height: 1.5;
+    }
+    
+    .reader-toolbar {
+        padding: 0.25rem !important;
+    }
+    
+    .reader-toolbar .btn {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.4rem;
+    }
+    
+    .modal-dialog {
+        margin: 0.5rem;
+    }
+}
+
+/* Scrollbar Styling for Reader */
+.reader-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.reader-content::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+.reader-content::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.reader-content::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Print Styles for Reader */
+@media print {
+    .reader-toolbar,
+    .progress {
+        display: none !important;
+    }
+    
+    .reader-container {
+        height: auto !important;
+    }
+    
+    .reader-content {
+        padding: 0 !important;
+        background: white !important;
+        overflow: visible !important;
+    }
+    
+    .reading-text {
+        box-shadow: none !important;
+        max-width: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+    }
+}

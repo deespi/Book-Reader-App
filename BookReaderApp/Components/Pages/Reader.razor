@@ -1,0 +1,382 @@
+@rendermode InteractiveServer
+@page "/reader/{BookId:int}"
+@inject IBookService BookService
+@inject NavigationManager Navigation
+@inject IJSRuntime JSRuntime
+@implements IAsyncDisposable
+
+<PageTitle>@(book?.Title ?? "Czytnik")</PageTitle>
+
+@if (book == null)
+{
+    <div class="text-center mt-5">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Ładowanie...</span>
+        </div>
+        <p class="mt-2">Ładowanie książki...</p>
+    </div>
+}
+else
+{
+    <div class="reader-container">
+        <!-- Toolbar -->
+        <div class="reader-toolbar bg-light border-bottom">
+            <div class="container-fluid">
+                <div class="d-flex justify-content-between align-items-center py-2">
+                    <div class="d-flex align-items-center">
+                        <a href="/library" class="btn btn-outline-secondary btn-sm me-3">
+                            <i class="fas fa-arrow-left"></i> Biblioteka
+                        </a>
+                        <h5 class="mb-0 fw-bold text-truncate" style="max-width: 300px;">
+                            <i class="fas fa-book-open text-primary me-2"></i>@book.Title
+                        </h5>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-secondary" @onclick="DecreaseFontSize" title="Zmniejsz czcionkę">
+                                <i class="fas fa-minus"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" disabled>
+                                @fontSize px
+                            </button>
+                            <button class="btn btn-outline-secondary" @onclick="IncreaseFontSize" title="Zwiększ czcionkę">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <button class="btn btn-outline-primary btn-sm" @onclick="ToggleTextToSpeech" title="Czytaj na głos">
+                            <i class="fas @(isReading ? "fa-pause" : "fa-play")"></i>
+                            @(isReading ? "Zatrzymaj" : "Czytaj")
+                        </button>
+                        <button class="btn btn-outline-success btn-sm" @onclick="ShowBookmarkModal" title="Dodaj zakładkę">
+                            <i class="fas fa-bookmark"></i> Zakładka
+                        </button>
+                        <button class="btn btn-outline-info btn-sm" @onclick="ShowNoteModal" title="Dodaj notatkę">
+                            <i class="fas fa-sticky-note"></i> Notatka
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Reading Area -->
+        <div class="reader-content" @onscroll="OnScroll" @onmouseup="OnTextSelection">
+            <div class="reading-text" style="font-size: @(fontSize)px; line-height: 1.6; font-family: 'Georgia', serif;">
+                @((MarkupString)FormattedContent)
+            </div>
+        </div>
+        
+        <!-- Progress Bar -->
+        <div class="progress" style="height: 4px;">
+            <div class="progress-bar bg-success" role="progressbar" style="width: @(readingProgress)%" 
+                 aria-valuenow="@readingProgress" aria-valuemin="0" aria-valuemax="100">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bookmark Modal -->
+    @if (showBookmarkModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-bookmark"></i> Dodaj zakładkę
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="HideBookmarkModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">Nazwa zakładki</label>
+                            <input type="text" class="form-control" @bind="bookmarkTitle" 
+                                   placeholder="Wpisz nazwę zakładki" maxlength="100">
+                        </div>
+                        <div class="alert alert-info">
+                            <small>
+                                <i class="fas fa-info-circle"></i> 
+                                Zakładka zostanie utworzona w aktualnej pozycji czytania.
+                            </small>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideBookmarkModal">Anuluj</button>
+                        <button type="button" class="btn btn-primary" @onclick="SaveBookmark" 
+                                disabled="@(string.IsNullOrWhiteSpace(bookmarkTitle))">
+                            <i class="fas fa-save"></i> Zapisz
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    
+    <!-- Note Modal -->
+    @if (showNoteModal)
+    {
+        <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">
+                            <i class="fas fa-sticky-note"></i> Dodaj notatkę
+                        </h5>
+                        <button type="button" class="btn-close" @onclick="HideNoteModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (!string.IsNullOrEmpty(selectedText))
+                        {
+                            <div class="alert alert-secondary">
+                                <strong><i class="fas fa-quote-left"></i> Zaznaczony tekst:</strong>
+                                <div class="mt-2">
+                                    <em>"@selectedText"</em>
+                                </div>
+                            </div>
+                        }
+                        <div class="mb-3">
+                            <label class="form-label">Treść notatki</label>
+                            <textarea class="form-control" rows="5" @bind="noteContent" 
+                                      placeholder="Wpisz swoją notatkę..."></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" @onclick="HideNoteModal">Anuluj</button>
+                        <button type="button" class="btn btn-primary" @onclick="SaveNote" 
+                                disabled="@(string.IsNullOrWhiteSpace(noteContent))">
+                            <i class="fas fa-save"></i> Zapisz
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int BookId { get; set; }
+    
+    private Book? book;
+    private int currentPosition = 0;
+    private double readingProgress = 0;
+    private int fontSize = 16;
+    private bool isReading = false;
+    private bool showBookmarkModal = false;
+    private bool showNoteModal = false;
+    private string bookmarkTitle = "";
+    private string noteContent = "";
+    private string selectedText = "";
+    private Timer? autoSaveTimer;
+    private DotNetObjectReference<Reader>? objRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        objRef = DotNetObjectReference.Create(this);
+        await LoadBook();
+        
+        // Setup auto-save timer (every 10 seconds)
+        autoSaveTimer = new Timer(async _ => await AutoSavePosition(), null, TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(10));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && book != null)
+        {
+            await JSRuntime.InvokeVoidAsync("readerFunctions.init", objRef);
+            await Task.Delay(100); // Wait for DOM to settle
+            await JSRuntime.InvokeVoidAsync("readerFunctions.restoreScrollPosition", book.LastPosition);
+        }
+    }
+
+    private async Task LoadBook()
+    {
+        try
+        {
+            book = await BookService.GetBookByIdAsync(BookId);
+            if (book == null)
+            {
+                Navigation.NavigateTo("/library");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading book: {ex.Message}");
+            Navigation.NavigateTo("/library");
+        }
+    }
+
+    private string FormattedContent
+    {
+        get
+        {
+            if (book?.Content == null) return "";
+            
+            // Simple formatting - convert line breaks to paragraphs
+            var paragraphs = book.Content.Split(new[] { "\n\n", "\r\n\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+            var formatted = string.Join("", paragraphs.Select(p => $"<p>{p.Replace("\n", "<br>").Replace("\r", "")}</p>"));
+            return formatted;
+        }
+    }
+
+    private void IncreaseFontSize()
+    {
+        if (fontSize < 24) fontSize += 2;
+    }
+
+    private void DecreaseFontSize()
+    {
+        if (fontSize > 12) fontSize -= 2;
+    }
+
+    private async Task ToggleTextToSpeech()
+    {
+        try
+        {
+            if (isReading)
+            {
+                await JSRuntime.InvokeVoidAsync("readerFunctions.stopTextToSpeech");
+                isReading = false;
+            }
+            else
+            {
+                var success = await JSRuntime.InvokeAsync<bool>("readerFunctions.startTextToSpeech", book?.Content ?? "");
+                if (success)
+                {
+                    isReading = true;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error with text-to-speech: {ex.Message}");
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnSpeechEnded()
+    {
+        isReading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OnScroll()
+    {
+        try
+        {
+            var position = await JSRuntime.InvokeAsync<int>("readerFunctions.saveScrollPosition");
+            var progress = await JSRuntime.InvokeAsync<double>("readerFunctions.calculateReadingProgress");
+            
+            currentPosition = position;
+            readingProgress = progress;
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error handling scroll: {ex.Message}");
+        }
+    }
+
+    private async Task OnTextSelection()
+    {
+        try
+        {
+            selectedText = await JSRuntime.InvokeAsync<string>("readerFunctions.getSelectedText");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting selected text: {ex.Message}");
+        }
+    }
+
+    private void ShowBookmarkModal()
+    {
+        bookmarkTitle = $"Zakładka {DateTime.Now:HH:mm}";
+        showBookmarkModal = true;
+    }
+
+    private void HideBookmarkModal()
+    {
+        showBookmarkModal = false;
+        bookmarkTitle = "";
+    }
+
+    private async Task SaveBookmark()
+    {
+        if (book == null || string.IsNullOrWhiteSpace(bookmarkTitle)) return;
+
+        try
+        {
+            // TODO: This will be implemented in Commit 8 with INoteService and IBookmarkService
+            // For now, just hide the modal
+            Console.WriteLine($"Bookmark saved: {bookmarkTitle} at position {currentPosition}");
+            HideBookmarkModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving bookmark: {ex.Message}");
+        }
+    }
+
+    private void ShowNoteModal()
+    {
+        showNoteModal = true;
+    }
+
+    private void HideNoteModal()
+    {
+        showNoteModal = false;
+        noteContent = "";
+        selectedText = "";
+    }
+
+    private async Task SaveNote()
+    {
+        if (book == null || string.IsNullOrWhiteSpace(noteContent)) return;
+
+        try
+        {
+            // TODO: This will be implemented in Commit 8 with INoteService and IBookmarkService
+            // For now, just hide the modal
+            Console.WriteLine($"Note saved: {noteContent} with selected text: {selectedText}");
+            HideNoteModal();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving note: {ex.Message}");
+        }
+    }
+
+    private async Task AutoSavePosition()
+    {
+        if (book == null) return;
+
+        try
+        {
+            await BookService.UpdateLastPositionAsync(book.Id, currentPosition, readingProgress);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error auto-saving position: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        autoSaveTimer?.Dispose();
+        
+        if (book != null)
+        {
+            await AutoSavePosition();
+        }
+        
+        if (isReading)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("readerFunctions.stopTextToSpeech");
+            }
+            catch { }
+        }
+        
+        objRef?.Dispose();
+    }
+}
