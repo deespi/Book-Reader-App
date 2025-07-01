@@ -3,6 +3,7 @@ using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas.Parser;
+using Microsoft.AspNetCore.Components.Forms;
 using System.Text;
 
 namespace BookReaderApp.Services;
@@ -69,21 +70,21 @@ public class FileProcessingService : IFileProcessingService
         return Task.FromResult(textBuilder.ToString());
     }
 
-    public async Task<Book> ProcessUploadedFileAsync(IFormFile file, string? customTitle = null)
+    public async Task<Book> ProcessUploadedFileAsync(IBrowserFile file, string? customTitle = null)
     {
-        if (file == null || file.Length == 0)
+        if (file == null || file.Size == 0)
             throw new ArgumentException("File is empty or not selected");
 
-        if (!IsValidFileType(file.FileName))
+        if (!IsValidFileType(file.Name))
             throw new ArgumentException("Unsupported file type. Supported formats: PDF, DOCX");
 
-        if (file.Length > GetMaxFileSizeBytes())
+        if (file.Size > GetMaxFileSizeBytes())
             throw new ArgumentException($"File is too large. Maximum size: {GetMaxFileSizeBytes() / (1024 * 1024)} MB");
 
         string content;
-        string fileExtension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        string fileExtension = Path.GetExtension(file.Name).ToLowerInvariant();
 
-        using var stream = file.OpenReadStream();
+        using var stream = file.OpenReadStream(GetMaxFileSizeBytes());
         
         content = fileExtension switch
         {
@@ -97,8 +98,8 @@ public class FileProcessingService : IFileProcessingService
 
         return new Book
         {
-            Title = customTitle ?? Path.GetFileNameWithoutExtension(file.FileName),
-            FileName = file.FileName,
+            Title = customTitle ?? Path.GetFileNameWithoutExtension(file.Name),
+            FileName = file.Name,
             FileType = fileExtension.TrimStart('.').ToUpperInvariant(),
             Content = content.Trim(),
             UploadDate = DateTime.UtcNow

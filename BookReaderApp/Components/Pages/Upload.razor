@@ -1,0 +1,224 @@
+@page "/upload"
+@inject IFileProcessingService FileProcessingService
+@inject IBookService BookService
+@inject NavigationManager Navigation
+
+<PageTitle>Dodaj książkę</PageTitle>
+
+<div class="container mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="mb-0">
+                        <i class="fas fa-upload"></i> Dodaj nową książkę
+                    </h2>
+                </div>
+                <div class="card-body">
+                    @if (!string.IsNullOrEmpty(errorMessage))
+                    {
+                        <div class="alert alert-danger" role="alert">
+                            <i class="fas fa-exclamation-triangle"></i> @errorMessage
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(successMessage))
+                    {
+                        <div class="alert alert-success" role="alert">
+                            <i class="fas fa-check-circle"></i> @successMessage
+                        </div>
+                    }
+
+                    <EditForm Model="@uploadModel" OnValidSubmit="@HandleFileUpload">
+                        <DataAnnotationsValidator />
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-file"></i> Wybierz plik (PDF lub DOCX)
+                            </label>
+                            <InputFile OnChange="@OnFileSelected" 
+                                      accept=".pdf,.docx" 
+                                      class="form-control" 
+                                      disabled="@isProcessing" />
+                            <div class="form-text">
+                                Obsługiwane formaty: PDF, DOCX. Maksymalny rozmiar: @(FileProcessingService.GetMaxFileSizeBytes() / (1024 * 1024)) MB
+                            </div>
+                            @if (selectedFile != null)
+                            {
+                                <div class="file-selected mt-2">
+                                    <small>
+                                        <i class="fas fa-check"></i> Wybrany plik: @selectedFile.Name
+                                        (@(selectedFile.Size / 1024.0 / 1024.0).ToString("F2") MB)
+                                    </small>
+                                </div>
+                            }
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label fw-bold">
+                                <i class="fas fa-tag"></i> Tytuł książki
+                            </label>
+                            <InputText @bind-Value="uploadModel.Title" 
+                                      class="form-control" 
+                                      placeholder="Wpisz tytuł książki (opcjonalne)"
+                                      disabled="@isProcessing" />
+                            <ValidationMessage For="@(() => uploadModel.Title)" />
+                            <div class="form-text">
+                                Jeśli nie podasz tytułu, zostanie użyta nazwa pliku.
+                            </div>
+                        </div>
+
+                        @if (isProcessing)
+                        {
+                            <div class="mb-4">
+                                <div class="processing-status">
+                                    <div class="spinner-border text-primary" role="status">
+                                        <span class="visually-hidden">Przetwarzanie...</span>
+                                    </div>
+                                    <div>
+                                        <div class="fw-bold">@processingStatus</div>
+                                        <small class="text-muted">To może potrwać kilka minut dla dużych plików...</small>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="/library" class="btn btn-outline-secondary me-md-2" disabled="@isProcessing">
+                                <i class="fas fa-arrow-left"></i> Powrót
+                            </a>
+                            <button type="submit" 
+                                   class="btn btn-primary" 
+                                   disabled="@(isProcessing || selectedFile == null)">
+                                @if (isProcessing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                                }
+                                <i class="fas fa-upload"></i> Dodaj książkę
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            </div>
+
+            <!-- Upload Tips -->
+            <div class="card mt-4 upload-tips">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-lightbulb"></i> Wskazówki
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <ul class="mb-0">
+                        <li>Obsługiwane są pliki PDF i DOCX</li>
+                        <li>Aplikacja automatycznie wyodrębni tekst z dokumentu</li>
+                        <li>Twoja pozycja czytania będzie automatycznie zapisywana</li>
+                        <li>Możesz dodawać notatki i zakładki podczas czytania</li>
+                        <li>Dostępna jest funkcja czytania na głos</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private UploadModel uploadModel = new();
+    private IBrowserFile? selectedFile;
+    private bool isProcessing = false;
+    private string? errorMessage;
+    private string? successMessage;
+    private string processingStatus = "";
+
+    private class UploadModel
+    {
+        public string Title { get; set; } = string.Empty;
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        errorMessage = null;
+        successMessage = null;
+
+        // Walidacja rozmiaru pliku
+        if (selectedFile.Size > FileProcessingService.GetMaxFileSizeBytes())
+        {
+            errorMessage = $"Plik jest za duży. Maksymalny rozmiar: {FileProcessingService.GetMaxFileSizeBytes() / (1024 * 1024)} MB";
+            selectedFile = null;
+            return;
+        }
+
+        // Walidacja typu pliku
+        if (!FileProcessingService.IsValidFileType(selectedFile.Name))
+        {
+            errorMessage = "Nieobsługiwany typ pliku. Wybierz plik PDF lub DOCX.";
+            selectedFile = null;
+            return;
+        }
+
+        // Automatycznie ustaw tytuł na podstawie nazwy pliku, jeśli nie został podany
+        if (string.IsNullOrWhiteSpace(uploadModel.Title))
+        {
+            uploadModel.Title = Path.GetFileNameWithoutExtension(selectedFile.Name);
+        }
+
+        StateHasChanged();
+    }
+
+    private async Task HandleFileUpload()
+    {
+        if (selectedFile == null)
+        {
+            errorMessage = "Proszę wybrać plik do przesłania.";
+            return;
+        }
+
+        isProcessing = true;
+        errorMessage = null;
+        successMessage = null;
+
+        try
+        {
+            processingStatus = "Przesyłanie pliku...";
+            StateHasChanged();
+
+            await Task.Delay(100); // Pozwól UI się odświeżyć
+
+            processingStatus = "Wyodrębnianie tekstu...";
+            StateHasChanged();
+
+            // Przetwórz plik
+            var book = await FileProcessingService.ProcessUploadedFileAsync(
+                selectedFile, 
+                string.IsNullOrWhiteSpace(uploadModel.Title) ? null : uploadModel.Title.Trim()
+            );
+
+            processingStatus = "Zapisywanie do bazy danych...";
+            StateHasChanged();
+
+            // Zapisz do bazy danych
+            var savedBook = await BookService.AddBookAsync(book);
+
+            successMessage = $"Książka \"{savedBook.Title}\" została pomyślnie dodana!";
+            
+            // Wyczyść formularz
+            uploadModel = new UploadModel();
+            selectedFile = null;
+
+            // Przekieruj do biblioteki po 2 sekundach
+            await Task.Delay(2000);
+            Navigation.NavigateTo("/library");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Wystąpił błąd podczas przetwarzania pliku: {ex.Message}";
+        }
+        finally
+        {
+            isProcessing = false;
+            processingStatus = "";
+            StateHasChanged();
+        }
+    }
+}
