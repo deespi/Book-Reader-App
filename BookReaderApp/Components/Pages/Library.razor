@@ -1,0 +1,198 @@
+@page "/"
+@page "/library"
+@inject IBookService BookService
+
+<PageTitle>Biblioteka</PageTitle>
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-book-open"></i> Moja Biblioteka</h2>
+        <a href="/upload" class="btn btn-success">
+            <i class="fas fa-plus"></i> Dodaj książkę
+        </a>
+    </div>
+    
+    @if (books == null)
+    {
+        <div class="text-center">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">Ładowanie...</span>
+            </div>
+            <p class="mt-2">Ładowanie biblioteki...</p>
+        </div>
+    }
+    else if (!books.Any())
+    {
+        <div class="row justify-content-center">
+            <div class="col-md-6">
+                <div class="alert alert-info text-center">
+                    <h4><i class="fas fa-book"></i> Brak książek w bibliotece</h4>
+                    <p>Dodaj pierwszą książkę aby rozpocząć czytanie!</p>
+                    <a href="/upload" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Dodaj książkę
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="row">
+            @foreach (var book in books)
+            {
+                <div class="col-lg-4 col-md-6 mb-4">
+                    <div class="card h-100 book-card">
+                        <div class="card-body d-flex flex-column">
+                            <h5 class="card-title">
+                                <i class="fas fa-@(book.FileType.ToLower() == "pdf" ? "file-pdf" : "file-word") text-muted me-2"></i>
+                                @book.Title
+                            </h5>
+                            <p class="card-text text-muted small mb-2">
+                                <i class="fas fa-calendar-alt"></i> Dodano: @book.UploadDate.ToString("dd.MM.yyyy")
+                            </p>
+                            <p class="card-text text-muted small mb-2">
+                                <i class="fas fa-file-alt"></i> Typ: @book.FileType.ToUpper()
+                            </p>
+                            
+                            @if (book.ReadingProgress > 0)
+                            {
+                                <div class="mb-3">
+                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                        <small class="text-muted">Postęp czytania</small>
+                                        <small class="text-muted">@book.ReadingProgress.ToString("F1")%</small>
+                                    </div>
+                                    <div class="progress" style="height: 6px;">
+                                        <div class="progress-bar bg-success" role="progressbar" 
+                                             style="width: @book.ReadingProgress%" 
+                                             aria-valuenow="@book.ReadingProgress" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            
+                            @if (book.Notes.Any() || book.Bookmarks.Any())
+                            {
+                                <div class="mb-3">
+                                    <small class="text-muted">
+                                        @if (book.Notes.Any())
+                                        {
+                                            <span class="me-3">
+                                                <i class="fas fa-sticky-note"></i> @book.Notes.Count notatek
+                                            </span>
+                                        }
+                                        @if (book.Bookmarks.Any())
+                                        {
+                                            <span>
+                                                <i class="fas fa-bookmark"></i> @book.Bookmarks.Count zakładek
+                                            </span>
+                                        }
+                                    </small>
+                                </div>
+                            }
+                            
+                            <div class="mt-auto">
+                                <div class="btn-group w-100" role="group">
+                                    <a href="/reader/@book.Id" class="btn btn-primary">
+                                        <i class="fas fa-book-open"></i> Czytaj
+                                    </a>
+                                    <button class="btn btn-outline-danger" @onclick="() => ShowDeleteConfirmation(book)">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<!-- Delete Confirmation Modal -->
+@if (bookToDelete != null)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background-color: rgba(0,0,0,0.5);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Potwierdź usunięcie</h5>
+                    <button type="button" class="btn-close" @onclick="CancelDelete"></button>
+                </div>
+                <div class="modal-body">
+                    <p>Czy na pewno chcesz usunąć książkę <strong>"@bookToDelete.Title"</strong>?</p>
+                    <p class="text-muted small">Ta operacja jest nieodwracalna. Zostaną również usunięte wszystkie notatki i zakładki związane z tą książką.</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CancelDelete">Anuluj</button>
+                    <button type="button" class="btn btn-danger" @onclick="ConfirmDelete" disabled="@isDeleting">
+                        @if (isDeleting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                        }
+                        <i class="fas fa-trash"></i> Usuń
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<Book>? books;
+    private Book? bookToDelete;
+    private bool isDeleting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadBooks();
+    }
+
+    private async Task LoadBooks()
+    {
+        try
+        {
+            books = await BookService.GetAllBooksAsync();
+        }
+        catch (Exception ex)
+        {
+            // TODO: Add proper error handling/notification
+            Console.WriteLine($"Error loading books: {ex.Message}");
+            books = new List<Book>();
+        }
+    }
+
+    private void ShowDeleteConfirmation(Book book)
+    {
+        bookToDelete = book;
+    }
+
+    private void CancelDelete()
+    {
+        bookToDelete = null;
+        isDeleting = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (bookToDelete == null) return;
+
+        isDeleting = true;
+        try
+        {
+            await BookService.DeleteBookAsync(bookToDelete.Id);
+            await LoadBooks(); // Refresh the list
+            bookToDelete = null;
+        }
+        catch (Exception ex)
+        {
+            // TODO: Add proper error handling/notification
+            Console.WriteLine($"Error deleting book: {ex.Message}");
+        }
+        finally
+        {
+            isDeleting = false;
+        }
+    }
+}
